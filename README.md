@@ -230,3 +230,184 @@ To respect the **strict pre-season temporal constraint** (predicting on the day 
   - **Coach Tenure & Age ("Shelf Life")**: Number of consecutive seasons the `coachID` has been behind the bench for the same `franchID` (NHL coaches historically face diminishing returns and rising dismissal risk after 3–4 seasons without a deep playoff run).
   - **Late-Season Collapse (`TeamSplits.csv`)**: Poor win percentage in `Feb` and `Mar` of season $t-1$ relative to `Oct`–`Dec`.
   - **Mid-Season Interim Tag**: Whether the coach finishing season $t-1$ entered via `stint >= 2` or had `notes = 'interim'`.
+
+---
+
+## 7. Formal Mathematical Formulation of Hockey Rule Regimes & Structural Changes
+
+To model a century of hockey data without introducing era-induced bias or data leakage, all historical rule changes, statistical tracking milestones, and table relationships can be expressed as formal mathematical partitions, functional identities, and conservation laws.
+
+### 7.1 Discrete Temporal Domain & The Lockout Operator
+Let $\mathcal{T}$ denote the ordered set of active professional hockey seasons in the dataset:
+$$\mathcal{T} = \{1909, 1910, \dots, 2003\} \cup \{2005, 2006, 2007, 2008, 2009\}, \qquad |\mathcal{T}| = 100$$
+Because the $2004\text{–}05$ season ($t = 2004$) was canceled due to the NHL lockout, the **lag (predecessor) operator** $\pi: \mathcal{T} \setminus \{1909\} \to \mathcal{T}$ is piecewise:
+$$\pi(t) = \begin{cases} t - 1, & \text{if } t \in \mathcal{T} \setminus \{1909, 2005\} \\ 2003, & \text{if } t = 2005 \end{cases}$$
+Consequently, while the **season index step** is always $\Delta n = 1$, the **chronological elapsed time** (which governs player/coach biological aging $\text{Age}_{p,t} = t - \text{birthYear}_p$) is:
+$$\Delta t = t - \pi(t) = 1 + \mathbb{I}(t = 2005) \in \{1, 2\}$$
+
+---
+
+### 7.2 Structural Regimes of Game Outcomes & Standings Points
+
+Let $(f, i, l, t)$ index a franchise $f \in \mathcal{F}$ (`franchID`), team code $i \in \mathcal{I}_{l,t}$ (`tmID`), league $l \in \mathcal{L}_t$ (`lgID`), and season $t \in \mathcal{T}$. The century of play partitions into **three mutually exclusive rule regimes** $\mathcal{T} = \mathcal{T}_{\text{I}} \sqcup \mathcal{T}_{\text{II}} \sqcup \mathcal{T}_{\text{III}}$:
+
+#### Regime I: Classical Two-Point / Tie Era ($\mathcal{T}_{\text{I}} = \{t \in \mathcal{T} : 1909 \le t \le 1998\}$)
+- **Game Partition Identity**:
+  $$G_{i,t} = W_{i,t} + L_{i,t} + T_{i,t}$$
+  *(Note: In split-season years $t \in [1916, 1920]$ recorded in `TeamsHalf.csv`, overtime was played until a winner was decided or ties were absent, yielding $T_{i,t} = 0$.)*
+- **Structural Nulls**:
+  $$\text{OTL}_{i,t} = \varnothing, \qquad \text{SoW}_{i,t} = \varnothing, \qquad \text{SoL}_{i,t} = \varnothing$$
+- **Standings Points Functional**:
+  $$\text{Pts}_{i,t} = 2 W_{i,t} + 1 T_{i,t}$$
+- **Strict Zero-Sum Points Conservation**: Every game $m$ allocates exactly $2$ standings points between the two competing teams ($2+0$ for a decision or $1+1$ for a tie). Summing across all teams in league $l$:
+  $$\sum_{i \in \mathcal{I}_{l,t}} \text{Pts}_{i,t} = 2 \sum_{i \in \mathcal{I}_{l,t}} W_{i,t} + \sum_{i \in \mathcal{I}_{l,t}} T_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} \left(W_{i,t} + L_{i,t} + T_{i,t}\right) = \sum_{i \in \mathcal{I}_{l,t}} G_{i,t}$$
+
+#### Regime II: Overtime Loss ("Loser Point") & Tie Era ($\mathcal{T}_{\text{II}} = \{t \in \mathcal{T} : 1999 \le t \le 2003\}$)
+In $1999\text{–}2000$, the NHL introduced 4-on-4 regular-season overtime and awarded $1$ point to a team losing in overtime ($\text{OTL}$), while retaining ties ($T$) if the 5-minute overtime ended scoreless:
+- **Game Partition Identity**:
+  $$G_{i,t} = W_{i,t} + L_{i,t} + T_{i,t} + \text{OTL}_{i,t}$$
+  where $W_{i,t} = W^{\text{reg}}_{i,t} + W^{\text{OT}}_{i,t}$ includes both regulation and overtime wins, and $L_{i,t} = L^{\text{reg}}_{i,t}$ counts **strictly regulation losses**.
+- **Structural Nulls**:
+  $$\text{SoW}_{i,t} = \varnothing, \qquad \text{SoL}_{i,t} = \varnothing$$
+- **Standings Points Functional**:
+  $$\text{Pts}_{i,t} = 2 W_{i,t} + 1 T_{i,t} + 1 \text{OTL}_{i,t}$$
+- **Non-Zero-Sum Points Inflation**: Any game decided in overtime awards $2$ points to the winner and $1$ point to the loser ($3$ points total instead of $2$). Thus, total league points strictly exceed total games played by the number of overtime decisions:
+  $$\sum_{i \in \mathcal{I}_{l,t}} \text{Pts}_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} G_{i,t} + \sum_{i \in \mathcal{I}_{l,t}} \text{OTL}_{i,t} > \sum_{i \in \mathcal{I}_{l,t}} G_{i,t}$$
+
+#### Regime III: Post-Lockout Shootout Era ($\mathcal{T}_{\text{III}} = \{t \in \mathcal{T} : 2005 \le t \le 2009\}$)
+Following the $2004\text{–}05$ lockout, tie games were abolished via the introduction of the penalty-shot **Shootout** (`ScoringShootout.csv`, `GoaliesShootout.csv`):
+- **Structural Nulls**:
+  $$T_{i,t} = \varnothing \quad (\text{identically } 0)$$
+- **Game Partition & Hierarchical Decomposition**:
+  $$G_{i,t} = W_{i,t} + L_{i,t} + \text{OTL}_{i,t}$$
+  where wins and overtime/shootout losses decompose into:
+  $$W_{i,t} = W^{\text{reg}}_{i,t} + W^{\text{OT}}_{i,t} + \text{SoW}_{i,t}, \qquad \text{OTL}_{i,t} = L^{\text{OT}}_{i,t} + \text{SoL}_{i,t}$$
+- **Standings Points Functional**:
+  $$\text{Pts}_{i,t} = 2 W_{i,t} + 1 \text{OTL}_{i,t}$$
+- **Points Inflation Law**: Every game that remains tied after 60 minutes of regulation (whether decided in 4-on-4 OT or the shootout) awards $3$ total standings points ($2$ to the winner, $1$ to the loser):
+  $$\sum_{i \in \mathcal{I}_{l,t}} \text{Pts}_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} G_{i,t} + \sum_{i \in \mathcal{I}_{l,t}} \left(L^{\text{OT}}_{i,t} + \text{SoL}_{i,t}\right)$$
+
+---
+
+### 7.3 Schedule Length Step Function & Era-Invariant Normalization
+
+The scheduled number of regular-season games per team $G^{\text{sched}}_{l,t}$ in the NHL is a piecewise step function of time:
+$$G^{\text{sched}}_{\text{NHL}, t} = \begin{cases}
+10 \le G_t \le 44, & 1917 \le t \le 1941 \quad (\text{Early expansion \& pre-WWII eras}) \\
+50 \text{ or } 60, & 1942 \le t \le 1948 \quad (\text{WWII \& early post-war era}) \\
+70, & 1949 \le t \le 1966 \quad (\text{Original Six era, } |\mathcal{I}_{\text{NHL},t}| = 6) \\
+74 \le G_t \le 78, & 1967 \le t \le 1973 \quad (\text{First expansion wave, } 12 \to 16 \text{ teams}) \\
+80, & 1974 \le t \le 1991 \quad (\text{70s/80s expansion \& WHA merger}) \\
+84, & 1992 \le t \le 1993 \quad (\text{Neutral-site game experiment}) \\
+48, & t = 1994 \quad (\text{1994–95 lockout-shortened season}) \\
+82, & t \in [1995, 2009] \setminus \{2004\} \quad (\text{Modern 82-game standard})
+\end{cases}$$
+
+Because extensive counting statistics $X_{i,t} \in \{W, L, T, \text{OTL}, \text{Pts}, \text{GF}, \text{GA}, \text{PIM}, \text{PPG}, \text{PPC}, \text{PKG}, \text{PKC}\}$ scale linearly with $G_{i,t}$ ($\mathbb{E}[X_{i,t}] \propto G_{i,t}$), comparing raw counts across seasons violates distributional stationarity. Furthermore, scoring environments shifted across eras (e.g., League $\mu(\text{GF}/G) \approx 7.9\text{–}8.0$ in the 1980s vs. $\approx 5.2\text{–}5.5$ in the late-1990s *"Dead Puck Era"*).
+
+To construct **stationary, era-invariant features**:
+1. **Rate / Intensive Normalization**:
+   $$\tilde{X}_{i,t} = \frac{X_{i,t}}{G_{i,t}}, \qquad \text{Pts\%}_{i,t} = \frac{\text{Pts}_{i,t}}{2 G_{i,t}} \in [0, 1]$$
+2. **Within-Season Z-Score Standardization** (removes both schedule length $G_t$ and era scoring/points-inflation shifts):
+   $$Z_{i,t}(X) = \frac{\tilde{X}_{i,t} - \mu_{l,t}(\tilde{X})}{\sigma_{l,t}(\tilde{X})}, \quad \text{where } \mu_{l,t}(\tilde{X}) = \frac{1}{|\mathcal{I}_{l,t}|}\sum_{j \in \mathcal{I}_{l,t}} \tilde{X}_{j,t}$$
+
+---
+
+### 7.4 League-Wide Conservation Laws & Cross-Table Accounting Identities
+
+1. **Conservation of Goals (`Teams.csv`)**:
+   In any closed league-season $(l, t)$, total Goals For equals total Goals Against:
+   $$\sum_{i \in \mathcal{I}_{l,t}} \text{GF}_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} \text{GA}_{i,t} \implies \sum_{i \in \mathcal{I}_{l,t}} \left(\text{GF}_{i,t} - \text{GA}_{i,t}\right) = 0$$
+2. **Reconciliation of Team Goals vs. Individual Skater & Goalie Goals**:
+   Let $\mathcal{P}_{i,t}$ be the set of skaters (`Scoring.csv`) and $\mathcal{G}_{i,t}$ be the set of goaltenders (`Goalies.csv`) appearing for team $i$ in season $t$.
+   - For $t \in \mathcal{T}_{\text{I}} \cup \mathcal{T}_{\text{II}}$ (pre-shootout):
+     $$\text{GF}_{i,t} = \sum_{p \in \mathcal{P}_{i,t}} G_{p,i,t}, \qquad \text{GA}_{i,t} = \sum_{g \in \mathcal{G}_{i,t}} \text{GA}_{g,i,t} + \sum_{g \in \mathcal{G}_{i,t}} \text{ENG}_{g,i,t}$$
+   - For $t \in \mathcal{T}_{\text{III}}$ (Shootout Era, $2005\text{–}2009$):
+     Under NHL statistical rules, the winner of a shootout is credited with $+1$ team goal in `Teams.GF` (and the loser with $+1$ team goal against in `Teams.GA`), whereas individual shootout goals (`ScoringShootout.G`) and shootout goals against (`GoaliesShootout.GA`) are **excluded** from `Scoring.G` and `Goalies.GA`:
+     $$\text{GF}_{i,t} = \sum_{p \in \mathcal{P}_{i,t}} G_{p,i,t} + \text{SoW}_{i,t}, \qquad \text{GA}_{i,t} = \sum_{g \in \mathcal{G}_{i,t}} \text{GA}_{g,i,t} + \sum_{g \in \mathcal{G}_{i,t}} \text{ENG}_{g,i,t} + \text{SoL}_{i,t}$$
+3. **Special Teams Duality ($t \ge 1963$)**:
+   Every Power Play Goal (`PPG`) scored by one team is simultaneously a Penalty Kill Goal Allowed (`PKG`) by its opponent, and every Short-Handed Goal For (`SHF`) is a Short-Handed Goal Allowed (`Teams.SHA`) by its opponent:
+   $$\sum_{i \in \mathcal{I}_{l,t}} \text{PPG}_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} \text{PKG}_{i,t}, \qquad \sum_{i \in \mathcal{I}_{l,t}} \text{PPC}_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} \text{PKC}_{i,t}, \qquad \sum_{i \in \mathcal{I}_{l,t}} \text{SHF}_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} \text{SHA}^{\text{team}}_{i,t}$$
+   Team Special Teams efficiencies and the **Bowman Special Teams Index** ($\text{STI}$) are defined as:
+   $$\text{PP\%}_{i,t} = \frac{\text{PPG}_{i,t}}{\text{PPC}_{i,t}}, \qquad \text{PK\%}_{i,t} = 1 - \frac{\text{PKG}_{i,t}}{\text{PKC}_{i,t}}, \qquad \text{STI}_{i,t} = \text{PP\%}_{i,t} + \text{PK\%}_{i,t}$$
+   where a league-average team satisfies $\mathbb{E}[\text{STI}_{i,t}] = 1.00$ ($100\%$).
+4. **Spatiotemporal Decomposition (`TeamSplits.csv` & `TeamVsTeam.csv`)**:
+   - **Home/Road Partition**: For each outcome $X \in \{W, L, T, \text{OTL}\}$:
+     $$X_{i,t} = hX_{i,t} + rX_{i,t}, \quad \text{with } \sum_{i \in \mathcal{I}_{l,t}} hW_{i,t} = \sum_{i \in \mathcal{I}_{l,t}} \left(rL_{i,t} + r\text{OTL}_{i,t}\right)$$
+   - **Monthly Partition**: Across calendar months $\mathcal{M} = \{\text{Sep}, \text{Oct}, \text{Nov}, \text{Dec}, \text{Jan}, \text{Feb}, \text{Mar}, \text{Apr}\}$:
+     $$X_{i,t} = \sum_{m \in \mathcal{M}} X^{(m)}_{i,t}$$
+   - **Reciprocal Head-to-Head Matrix (`TeamVsTeam.csv`)**: For any ordered pair $(i, j) \in \mathcal{I}_{l,t}^2$ ($i \neq j$):
+     $$W_{i,j,t} = L_{j,i,t} + \text{OTL}_{j,i,t}, \qquad T_{i,j,t} = T_{j,i,t}, \qquad X_{i,t} = \sum_{j \in \mathcal{I}_{l,t} \setminus \{i\}} X_{i,j,t}$$
+
+---
+
+### 7.5 Structural Evolution of Divisions, Conferences & The Target Ranking Operator
+
+Let $\mathcal{D}_{l,t} = \{d_1, d_2, \dots, d_{M_{l,t}}\}$ be the partition of the teams $\mathcal{I}_{l,t}$ into $M_{l,t}$ divisions (`divID`), and $\mathcal{C}_{l,t}$ be the partition into conferences (`confID`):
+$$M_{\text{NHL}, t} = |\mathcal{D}_{\text{NHL}, t}| = \begin{cases}
+1 \; (\text{divID} = \varnothing), & t \in [1917, 1925] \cup [1938, 1966] \\
+2 \; (\text{CA, AM or ED, WD}), & t \in [1926, 1937] \cup [1967, 1973] \\
+4 \; (\text{AD, NO, PT, SM or AT, NE, CE, PC}), & t \in [1974, 1997] \quad (\text{with } |\mathcal{C}_{\text{NHL},t}| = 2: \text{CC, WA or EC, WC}) \\
+6 \; (\text{AT, NE, SE, CE, NW, PC}), & t \in [1998, 2009] \quad (\text{with } |\mathcal{C}_{\text{NHL},t}| = 2: \text{EC, WC; } |d_k| = 5)
+\end{cases}$$
+
+For any team $i$ belonging to division $d(i, t) \in \mathcal{D}_{l,t}$, the target variable $\text{rank}_{i,t}$ in `Teams.csv` is defined by the **within-division strict total order** $\succ_t$:
+$$\text{rank}_{i,t} = 1 + \sum_{j \in d(i,t) \setminus \{i\}} \mathbb{I}\!\left(j \succ_t i\right) \in \left\{1, 2, \dots, |d(i,t)|\right\}$$
+where $j \succ_t i$ iff:
+$$j \succ_t i \iff \left(\text{Pts}_{j,t} > \text{Pts}_{i,t}\right) \;\lor\; \left(\text{Pts}_{j,t} = \text{Pts}_{i,t} \land W_{j,t} > W_{i,t}\right) \;\lor\; \left(\text{Pts}_{j,t} = \text{Pts}_{i,t} \land W_{j,t} = W_{i,t} \land \text{H2H}_{j,i,t} > 0\right) \;\lor\; \dots$$
+
+#### Persistence Baseline & Evaluation Metric Formulation
+Given the franchise mapping $f = \phi(i)$, the **persistence baseline predictor** (*modelo de persistência*) for season $t$ is:
+$$\hat{y}^{\text{pers}}_{f,t} = \text{rank}_{f, \pi(t)}$$
+For a predictive model producing divisional rank predictions $\hat{y}_{f,t} \in \{1, \dots, |d(f,t)|\}$ across all franchises $f \in \mathcal{F}_t$, let $D(\mathbf{y}_t, \hat{\mathbf{y}}_t)$ denote a distance metric on rank vectors (e.g., $\ell_1$ Footrule distance $\sum_{f} |y_{f,t} - \hat{y}_{f,t}|$, $\ell_2$ Euclidean distance $\|\mathbf{y}_t - \hat{\mathbf{y}}_t\|_2$, or Kendall's $\tau$ distance). The user-specified **relative squared error criterion** requires:
+$$D(\mathbf{y}_t, \hat{\mathbf{y}}_t) < D(\mathbf{y}_t, \mathbf{y}_{\pi(t)}) \quad \text{with magnitude measured by} \quad \mathcal{E}_t = \left(D(\mathbf{y}_t, \hat{\mathbf{y}}_t) - D(\mathbf{y}_t, \mathbf{y}_{\pi(t)})\right)^2$$
+
+---
+
+### 7.6 Multi-Stint Aggregation & Formal Coaching Turnover Targets
+
+#### Coaching Stints & Binary Turnover Formulation (`Coaches.csv`)
+For each franchise $f$ in season $t$, let $(c^{(1)}_{f,t}, c^{(2)}_{f,t}, \dots, c^{(K_{f,t})}_{f,t})$ be the ordered sequence of head coaches corresponding to $\text{stint} = s \in \{1, \dots, K_{f,t}\}$, where $K_{f,t} \in \{1, 2, 3\}$. Team game outcomes are the sum of stint outcomes:
+$$G_{f,t} = \sum_{s=1}^{K_{f,t}} g_{f,t}^{(s)}, \qquad W_{f,t} = \sum_{s=1}^{K_{f,t}} w_{f,t}^{(s)}, \qquad L_{f,t} = \sum_{s=1}^{K_{f,t}} l_{f,t}^{(s)}$$
+
+We can formally define three binary coaching-change indicators between season $\pi(t)$ and season $t$:
+1. **Off-Season Coaching Change** (the season-opening coach in season $t$ differs from the coach who finished season $\pi(t)$):
+   $$Y^{\text{off}}_{f,t} = \mathbb{I}\!\left(c^{(1)}_{f,t} \neq c^{(K_{f,\pi(t)})}_{f,\pi(t)}\right) \in \{0, 1\}$$
+2. **Year-Over-Year Opening Coach Change** (the season-opening coach in season $t$ differs from the season-opening coach in season $\pi(t)$):
+   $$Y^{\text{open}}_{f,t} = \mathbb{I}\!\left(c^{(1)}_{f,t} \neq c^{(1)}_{f,\pi(t)}\right) \in \{0, 1\}$$
+3. **In-Season Coaching Dismissal/Change** during season $t$:
+   $$Y^{\text{in}}_{f,t} = \mathbb{I}\!\left(K_{f,t} > 1\right) \in \{0, 1\}$$
+4. **Composite Season-to-Season Coaching Instability** (any change occurring either during season $t$ or in the off-season entering season $t$):
+   $$Y^{\text{change}}_{f,t} = \mathbb{I}\!\left(c^{(1)}_{f,t} \neq c^{(K_{f,\pi(t)})}_{f,\pi(t)} \;\lor\; K_{f,t} > 1\right) \in \{0, 1\}$$
+
+#### Skater Multi-Stint Aggregation & The `1987–1990` Supplemental Identity (`Scoring.csv` & `ScoringSup.csv`)
+For any player $p$ in season $t$ who played on $S_{p,t} \in \{1, 2, 3, 4\}$ teams (`stint` $s = 1, \dots, S_{p,t}$), full-season player statistics are the sum over stints:
+$$X_{p,t} = \sum_{s=1}^{S_{p,t}} X^{(s)}_{p,t} \quad \forall X \in \{\text{GP}, G, A, \text{Pts}, \text{PIM}, +/-, \text{PPG}, \text{SHG}, \text{GWG}, \text{GTG}, \text{SOG}\}$$
+For Power Play Assists (`PPA`) and Short-Handed Assists (`SHA`) during the four-season window $t \in \{1987, 1988, 1989, 1990\}$:
+$$\text{PPA}^{(s)}_{p,t}\big|_{\texttt{Scoring}} = \begin{cases} \text{PPA}_{p,t}, & \text{if } S_{p,t} = 1 \\ \varnothing, & \text{if } S_{p,t} \ge 2 \end{cases}, \qquad \sum_{s=1}^{S_{p,t}} \text{PPA}^{(s)}_{p,t} = \text{PPA}_{p,t}\big|_{\texttt{ScoringSup}} \quad \text{for } S_{p,t} \ge 2$$
+When estimating team-level power-play assist contributions for a traded player $p$ ($S_{p,t} \ge 2$) in $t \in [1987, 1990]$, the unobserved stint-level $\widehat{\text{PPA}}^{(s)}_{p,t}$ can be imputed proportionally via the player's stint assists $A^{(s)}_{p,t}$ or games played $\text{GP}^{(s)}_{p,t}$:
+$$\widehat{\text{PPA}}^{(s)}_{p,t} = \text{PPA}_{p,t}\big|_{\texttt{ScoringSup}} \cdot \frac{A^{(s)}_{p,t}}{\sum_{k=1}^{S_{p,t}} A^{(k)}_{p,t}}$$
+
+---
+
+### 7.7 Summary Matrix of Structural Missingness Step Functions (MNAR)
+
+Let $\Omega(X, t) \in \{0, 1\}$ be the observability indicator ($\Omega = 1$ if tracked/defined in season $t$, $\Omega = 0$ if structurally null $\varnothing$). Across the NHL (`lgID = 'NHL'`), the historical evolution of statistical tracking is summarized by:
+
+| Variable / Table | Observability Domain $\Omega(X, t) = 1$ | Structural Null Domain $\Omega(X, t) = 0$ | Mathematical / Historical Trigger |
+| :--- | :---: | :---: | :--- |
+| All Tables (`*`) | $t \in [1909, 2009] \setminus \{2004\}$ | $t = 2004$ | **2004–05 NHL Lockout** canceled entire season |
+| `TeamsHalf.*` | $t \in [1916, 1920]$ | $t \notin [1916, 1920]$ | NHA / early NHL split-season (1st/2nd half) format |
+| `TeamsSC`, `ScoringSC`, `GoaliesSC` | $t \in [1912, 1925]$ | $t > 1925$ | Inter-league Stanley Cup Challenge era (NHL vs. PCHA/WCHL) |
+| `Teams.PIM` | $t \ge 1917$ | $t \in [1909, 1916]$ | Official NHL tracking of Penalty Minutes began in 1917–18 |
+| `Teams.divID` | $t \in [1926, 1937] \cup [1967, 2009]$ | $t \in [1909, 1925] \cup [1938, 1966]$ | Single-table league standings (no divisions) |
+| `Goalies.SA`, `Scoring.SOG` | $t \ge 1955 \text{ / } 1967$ | $t < 1955$ | Official NHL tracking of Shots on Goal (`SOG` / `SA`) |
+| `Teams.PPG`, `PPC`, `PKG`, `PKC`, `SHF`, `SHA` | $t \ge 1963$ | $t < 1963$ | Official team Special Teams tracking began in 1963–64 |
+| `Scoring.+/-`, `PPG`, `SHG`, `GWG`, `GTG` | $t \ge 1967$ | $t < 1967$ | Expansion-era standardization of skater situational stats |
+| `Teams.BenchMinor` | $t \ge 1969$ | $t < 1969$ | Separate tracking of team Bench Minor penalties |
+| `Teams.confID` | $t \ge 1974$ | $t < 1974$ | Creation of Wales & Campbell Conferences (1974–75) |
+| `ScoringSup.PPA`, `SHA` | $t \in [1987, 1990] \land S_{p,t} \ge 2$ | $t \notin [1987, 1990] \lor S_{p,t} = 1$ | Unsplit full-season situational assists for traded players |
+| `Teams.OTL`, `TeamSplits.*OL`, `TeamVsTeam.OTL` | $t \ge 1999$ | $t \le 1998$ | Introduction of 4-on-4 regular-season overtime loss point |
+| `Teams.T`, `TeamSplits.*T`, `Scoring.GTG` | $t \le 2003$ | $t \ge 2005$ | Abolition of tie games (`T`) and game-tying goals (`GTG`) |
+| `Teams.SoW`, `SoL`, `*Shootout.*` | $t \ge 2005$ | $t \le 2003$ | Introduction of the post-overtime Shootout (2005–06) |
+| `*Post*` (Postseason columns/tables) | $\text{playoff}_{i,t} \neq \varnothing$ | $\text{playoff}_{i,t} = \varnothing$ | Conditional on team qualifying for the Stanley Cup Playoffs |
